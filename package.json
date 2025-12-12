@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "start": "parcel index.html"
+  },
+  "devDependencies": {},
+  "dependencies": {
+    "@codemirror/state": "6.5.1",
+    "@codemirror/view": "6.39.3",
+    "@codemirror/commands": "6.10.0",
+    "parcel": "2.16.3"
+  }
+}
