@@ -8,42 +8,54 @@ import {
 import {defaultKeymap} from "@codemirror/commands";
 import {StateField, RangeSetBuilder} from "@codemirror/state";
 
-const foxImage =
-  "https://upload.wikimedia.org/wikipedia/commons/3/30/Vulpes_vulpes_ssp_fulvus.jpg";
+const doc = `a widget on a line with other content will not be re-created: {charCounter}
 
-const doc = `the quick brown
-fox
-jumps over the lazy dog`;
+A widget on its own line will:
+{charCounter}
+`;
 
-class FoxWidget extends WidgetType {
+class BlankLineWidget extends WidgetType {
+  #key;
+  #docSize;
+
+  constructor(key, docSize) {
+    super();
+    this.#key = key.toString();
+    this.#docSize = docSize;
+  }
+
   toDOM() {
-    const img = document.createElement("img");
-    img.src = foxImage;
-    img.style = "height: auto; width: 400px;";
-    return img;
+    console.warn("toDOM");
+    const container = document.createElement("span");
+    container.style = "color: gray; font-style: italic; font-size: small";
+    container.textContent = `${this.#docSize} chars (new)`;
+    container.setAttribute("data-key", this.#key);
+    return container;
   }
 
   eq(other) {
-    return true;
+    return other.#key === this.#key && other.#docSize === this.#docSize;
   }
 
-  ignoreEvent() {
-    return false;
+  updateDOM(dom) {
+    if (dom.getAttribute("data-key") !== this.#key) return false;
+    dom.textContent = `${this.#docSize} chars (updated)`;
+    return true;
   }
 }
 
-function buildFoxDecorations(doc) {
+function buildBlankLineDecorations(state) {
   const builder = new RangeSetBuilder();
 
-  const words = doc.split(/\s/);
+  const words = state.doc.toString().split(/\s/);
 
+  let key = 0;
   let start = 0;
-  for (const word of words) {
-    if (word === "fox") {
+  for (const [i, word] of words.entries()) {
+    if (word === "{charCounter}") {
       const decoration = Decoration.widget({
-        widget: new FoxWidget(),
+        widget: new BlankLineWidget(key++, state.doc.length),
       });
-      decoration.startSide = 1;
       builder.add(start, start + word.length, decoration);
     }
     start += word.length + 1;
@@ -53,10 +65,10 @@ function buildFoxDecorations(doc) {
 }
 
 const decorationsPlugin = StateField.define({
-  create: (state) => buildFoxDecorations(state.doc.toString()),
+  create: buildBlankLineDecorations,
   update: (prev, tr) =>
-    tr.docChanged ? buildFoxDecorations(tr.state.doc.toString()) : prev,
-  provide: (field) => EditorView.outerDecorations.from(field),
+    tr.docChanged ? buildBlankLineDecorations(tr.state) : prev,
+  provide: (field) => EditorView.decorations.from(field),
 });
 
 new EditorView({
