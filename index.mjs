@@ -11,15 +11,25 @@ import {StateField, RangeSetBuilder} from "@codemirror/state";
 const foxImage =
   "https://upload.wikimedia.org/wikipedia/commons/3/30/Vulpes_vulpes_ssp_fulvus.jpg";
 
-const doc = `the quick brown
+const doc = `preceding content
+
 fox
-jumps over the lazy dog`;
+fox
+fox
+
+intermediate content
+
+fox
+fox
+fox
+
+succeeding content`;
 
 class FoxWidget extends WidgetType {
   toDOM() {
     const img = document.createElement("img");
     img.src = foxImage;
-    img.style = "height: auto; width: 400px;";
+    img.style = "height: auto; width: 200px;";
     return img;
   }
 
@@ -32,22 +42,30 @@ class FoxWidget extends WidgetType {
   }
 }
 
+/** Replaces each repeating sequence of the word 'fox' with a widget, possibly spanning multiple lines. */
 function buildFoxDecorations(doc) {
   const builder = new RangeSetBuilder();
 
   const words = doc.split(/\s/);
 
   let start = 0;
+  let foxRangeStart = null;
   for (const word of words) {
     if (word === "fox") {
-      const decoration = Decoration.widget({
+      foxRangeStart ??= start;
+    } else if (foxRangeStart !== null) {
+      const decoration = Decoration.replace({
         widget: new FoxWidget(),
+        block: true
       });
-      decoration.startSide = 1;
-      builder.add(start, start + word.length, decoration);
+      builder.add(foxRangeStart, start - 1, decoration);
+      foxRangeStart = null;
     }
+
     start += word.length + 1;
   }
+
+  // doesn't handle words at end of document but that's not important for the demo
 
   return builder.finish();
 }
