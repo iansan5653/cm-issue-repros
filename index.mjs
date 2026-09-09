@@ -1,12 +1,5 @@
-// @ts-check
-
-import {
-  BlockWrapper,
-  Decoration,
-  EditorView,
-  WidgetType,
-} from "@codemirror/view";
-import { RangeSetBuilder, StateEffect, StateField} from "@codemirror/state";
+import {BlockWrapper, Decoration, EditorView, WidgetType} from "@codemirror/view";
+import {RangeSetBuilder, StateEffect, StateField} from "@codemirror/state";
 
 const image =
   "https://upload.wikimedia.org/wikipedia/commons/3/30/Vulpes_vulpes_ssp_fulvus.jpg";
