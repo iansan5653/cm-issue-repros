@@ -1,66 +1,96 @@
+// @ts-check
+
 import {
   BlockWrapper,
   Decoration,
   EditorView,
-  keymap,
   WidgetType,
 } from "@codemirror/view";
-import {defaultKeymap} from "@codemirror/commands";
-import {StateField, RangeSetBuilder} from "@codemirror/state";
+import { RangeSetBuilder, StateEffect, StateField} from "@codemirror/state";
 
-const foxImage =
+const image =
   "https://upload.wikimedia.org/wikipedia/commons/3/30/Vulpes_vulpes_ssp_fulvus.jpg";
 
-const doc = `the quick brown
-fox
-jumps over the lazy dog`;
+const doc = `before
 
-class FoxWidget extends WidgetType {
+${image}
+
+after`;
+
+class ImageWidget extends WidgetType {
   toDOM() {
+    console.count("toDOM")
     const img = document.createElement("img");
-    img.src = foxImage;
+    img.src = image;
     img.style = "height: auto; width: 400px;";
     return img;
   }
 
-  eq(other) {
-    return true;
-  }
-
-  ignoreEvent() {
-    return false;
+  eq() {
+    return true; // always eq - should never re-trigger `toDOM`
   }
 }
 
-function buildFoxDecorations(doc) {
-  const builder = new RangeSetBuilder();
+function build(doc) {
+  const decorations = new RangeSetBuilder();
+  const wrappers = new RangeSetBuilder();
 
-  const words = doc.split(/\s/);
+  const start = doc.indexOf(image);
+  const end = start + image.length;
 
-  let start = 0;
-  for (const word of words) {
-    if (word === "fox") {
-      const decoration = Decoration.widget({
-        widget: new FoxWidget(),
-      });
-      decoration.startSide = 1;
-      builder.add(start, start + word.length, decoration);
+  // First line and image range are wrapped in block wrappers (doesn't repro without these)
+  wrappers.add(0, doc.indexOf("\n"), BlockWrapper.create({tagName: "span"}));
+  wrappers.add(start, end, BlockWrapper.create({tagName: "div"}));
+
+  // Image range is replaced with a widget
+  decorations.add(start, end, Decoration.replace({
+    widget: new ImageWidget(),
+  }));
+
+  return {
+    decorations: decorations.finish(),
+    wrappers: wrappers.finish(),
+  };
+}
+
+const rebuild = StateEffect.define();
+
+const field = StateField.define({
+  create: (state) => build(state.doc.toString()),
+  update: (value, transaction) => {
+    // If we uncomment this to build decorations as a synchronous (blocking) step, the bug doesn't repro
+    // return build(transaction.state.doc.toString());
+
+    if (transaction.effects.some((effect) => effect.is(rebuild))) {
+      return build(transaction.state.doc.toString());
     }
-    start += word.length + 1;
+
+    // Mapping here to make it more realistic, but the bug still repros if we just `return value` without mapping
+    return transaction.docChanged
+      ? {
+          decorations: value.decorations.map(transaction.changes),
+          wrappers: value.wrappers.map(transaction.changes),
+        }
+      : value;
+  },
+  provide: (field) => [
+    EditorView.outerDecorations.from(field, (value) => value.decorations),
+    EditorView.blockWrappers.from(field, (value) => value.wrappers),
+  ],
+});
+
+// Asynchronously rebuild decorations (simulates a non-blocking decoration builder step). Bug only repros if this is async,
+// but the timing doesn't seem particularly important - if you change it to only rebuild on a button press, it still repros.
+const asyncRebuild = EditorView.updateListener.of((update) => {
+  if (update.docChanged) {
+    setTimeout(() => {
+      update.view.dispatch({effects: rebuild.of(null)});
+    });
   }
-
-  return builder.finish();
-}
-
-const decorationsPlugin = StateField.define({
-  create: (state) => buildFoxDecorations(state.doc.toString()),
-  update: (prev, tr) =>
-    tr.docChanged ? buildFoxDecorations(tr.state.doc.toString()) : prev,
-  provide: (field) => EditorView.outerDecorations.from(field),
 });
 
 new EditorView({
   doc,
   parent: document.getElementById("editor"),
-  extensions: [keymap.of(defaultKeymap), decorationsPlugin],
+  extensions: [field, asyncRebuild],
 });
