@@ -20,7 +20,7 @@ class ImageWidget extends WidgetType {
   }
 
   eq() {
-    return true; // always eq - should never re-trigger `toDOM`
+    return true;
   }
 }
 
